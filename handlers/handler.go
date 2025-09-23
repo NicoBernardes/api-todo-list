@@ -3,19 +3,20 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 type Todo struct {
-	ID int `json:"id"`
-	Title string `json:"title"`
-	Description string `json:"description"`
-	Completed bool `json:"completed"`
-	CreatedAt time.Time `json:"created_at"`
-	Updated_at time.Time `json:"updated_at"`
+	ID          int       `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Completed   bool      `json:"completed"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type TodoHandler struct {
@@ -27,8 +28,7 @@ func NewTodoHandler(db *sql.DB) *TodoHandler {
 }
 
 func (h *TodoHandler) GetTodos(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("Select id, title, description, completed, created_at, updated_at FROM todos
-	order by created_at DESC")
+	rows, err := h.db.Query("SELECT id, title, description, completed, created_at, updated_at FROM todos ORDER BY created_at DESC")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -38,15 +38,21 @@ func (h *TodoHandler) GetTodos(w http.ResponseWriter, r *http.Request) {
 	var todos []Todo
 	for rows.Next() {
 		var todo Todo
-		err := rows.Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.Updated_at)
+		err := rows.Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		todos = append(todos, todo)
 	}
+
+	if err = rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(todo)
+	json.NewEncoder(w).Encode(todos)
 }
 
 func (h *TodoHandler) CreateTodo(w http.ResponseWriter, r *http.Request) {
@@ -69,11 +75,11 @@ func (h *TodoHandler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 
 	var id int
 	var createdAt, updatedAt time.Time
-	err := h.db.QueryRow(query, 
+	err := h.db.QueryRow(query,
 		sql.Named("title", todo.Title),
 		sql.Named("description", todo.Description),
 		sql.Named("completed", todo.Completed)).Scan(&id, &createdAt, &updatedAt)
-	
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,12 +122,12 @@ func (h *TodoHandler) UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		sql.Named("description", todo.Description),
 		sql.Named("completed", todo.Completed),
 		sql.Named("id", id)).Scan(
-			&updatedTodo.ID, 
-			&updatedTodo.Title, 
-			&updatedTodo.Description, 
-			&updatedTodo.Completed, 
-			&updatedTodo.CreatedAt, 
-			&updatedTodo.UpdatedAt)
+		&updatedTodo.ID,
+		&updatedTodo.Title,
+		&updatedTodo.Description,
+		&updatedTodo.Completed,
+		&updatedTodo.CreatedAt,
+		&updatedTodo.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
