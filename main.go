@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,10 +16,10 @@ import (
 // LoadConfig carrega as configurações do ambiente
 func LoadConfig() *database.Config {
 	return &database.Config{
-		Server:   getEnv("DB_SERVER", "localhost"),
+		Server:   getEnv("DB_SERVER", "localhost\\SQLEXPRESS"),
 		Port:     getEnv("DB_PORT", "1433"),
-		User:     getEnv("DB_USER", "sa"),
-		Password: getEnv("DB_PASSWORD", "YourPassword123"),
+		User:     getEnv("DB_USER", ""),
+		Password: getEnv("DB_PASSWORD", ""),
 		Database: getEnv("DB_NAME", "TodoDB"),
 	}
 }
@@ -64,12 +65,22 @@ func main() {
 	router.HandleFunc("/todos/{id}", todoHandler.UpdateTodo).Methods("PUT")
 	router.HandleFunc("/todos/{id}", todoHandler.DeleteTodo).Methods("DELETE")
 
-	// Iniciar o servidor
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	// Health check
+	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "healthy", "database": "connected"})
+	}).Methods("GET")
 
-	fmt.Printf("Servidor To-DO API rodando na porta %s...\n", port)
+	// Iniciar o servidor
+	port := getEnv("PORT", "8080")
+	fmt.Printf("🚀 Servidor To-DO API rodando na porta %s...\n", port)
+	fmt.Println("📊 Endpoints disponíveis:")
+	fmt.Println("   GET    http://localhost:" + port + "/todos")
+	fmt.Println("   POST   http://localhost:" + port + "/todos")
+	fmt.Println("   GET    http://localhost:" + port + "/todos/{id}")
+	fmt.Println("   PUT    http://localhost:" + port + "/todos/{id}")
+	fmt.Println("   DELETE http://localhost:" + port + "/todos/{id}")
+	fmt.Println("   GET    http://localhost:" + port + "/health")
+
 	log.Fatal(http.ListenAndServe(":"+port, router))
 }
