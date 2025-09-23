@@ -17,34 +17,40 @@ type Config struct {
 }
 
 func Connect(cfg *Config) (*sql.DB, error) {
-	connString := fmt.Sprintf("server=%s;user id=%s;password=%s; port=%s;database=%s;",
-		cfg.Server, cfg.User, cfg.Password, cfg.Port, cfg.Database)
+	var connString string
+	if cfg.User == "" && cfg.Password == "" {
+		// Windows Authentication
+		connString = fmt.Sprintf("server=%s;port=%s;database=%s;trusted_connection=yes;",
+			cfg.Server, cfg.Port, cfg.Database)
+	} else {
+		// SQL Server Authentication
+		connString = fmt.Sprintf("server=%s;port=%s;user id=%s;password=%s;database=%s;",
+			cfg.Server, cfg.Port, cfg.User, cfg.Password, cfg.Database)
+	}
+
+	log.Printf("Tentando conectar com: server=%s, database=%s", cfg.Server, cfg.Database)
 
 	db, err := sql.Open("sqlserver", connString)
 	if err != nil {
-		return nil, fmt.Errorf("Erro ao conectar ao banco de dados: %w", err) //Using %w to wrap error
+		return nil, fmt.Errorf("erro ao conectar ao banco de dados: %w", err)
 	}
 
 	return db, nil
 }
 
-// CreateTable if not exists
-func CreateTable(db *sql.DB) {
+// CheckTableExists
+func CheckTableExists(db *sql.DB, tableName string) (bool, error) {
 	query := `
-	IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='todo' AND xtype='U')
-	CREATE TABLE todo (
-		id INT IDENTITY(1,1) PRIMARY KEY,
-		title NVARCHAR(255) NOT NULL,
-		description NVARCHAR(MAX),
-		completed BIT DEFAULT 0,
-		created_at DATETIME2 DEFAULT GETDATE(),
-		updated_at DATETIME2 DEFAULT GETDATE()
-	)
+	SELECT COUNT(*) 
+	FROM INFORMATION_SCHEMA.TABLES 
+	WHERE TABLE_NAME = @tableName AND TABLE_TYPE = 'BASE TABLE'
 	`
-	_, err := db.Exec(query)
+
+	var count int
+	err := db.QueryRow(query, sql.Named("tableName", tableName)).Scan(&count)
 	if err != nil {
-		log.Fatal("Erro ao criar tabela:", err.Error())
+		return false, err
 	}
 
-	log.Println("Tabela 'todo' verificada/criada com sucesso!")
+	return count > 0, nil
 }

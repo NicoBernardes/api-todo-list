@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Todo representa uma tarefa
 type Todo struct {
 	ID          int       `json:"id"`
 	Title       string    `json:"title"`
@@ -19,18 +20,21 @@ type Todo struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// TodoHandler gerencia as requisições de TODOs
 type TodoHandler struct {
 	db *sql.DB
 }
 
+// NewTodoHandler cria uma nova instância do TodoHandler
 func NewTodoHandler(db *sql.DB) *TodoHandler {
 	return &TodoHandler{db: db}
 }
 
+// GetTodos retorna todas as tarefas
 func (h *TodoHandler) GetTodos(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query("SELECT id, title, description, completed, created_at, updated_at FROM todos ORDER BY created_at DESC")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Erro ao buscar tarefas: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -40,25 +44,49 @@ func (h *TodoHandler) GetTodos(w http.ResponseWriter, r *http.Request) {
 		var todo Todo
 		err := rows.Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Erro ao ler tarefa: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		todos = append(todos, todo)
-	}
-
-	if err = rows.Err(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(todos)
 }
 
+// GetTodo retorna uma tarefa específica
+func (h *TodoHandler) GetTodo(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		http.Error(w, "ID inválido", http.StatusBadRequest)
+		return
+	}
+
+	var todo Todo
+	err = h.db.QueryRow(
+		"SELECT id, title, description, completed, created_at, updated_at FROM todos WHERE id = @id",
+		sql.Named("id", id),
+	).Scan(&todo.ID, &todo.Title, &todo.Description, &todo.Completed, &todo.CreatedAt, &todo.UpdatedAt)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Tarefa não encontrada", http.StatusNotFound)
+		} else {
+			http.Error(w, "Erro ao buscar tarefa: "+err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(todo)
+}
+
+// CreateTodo cria uma nova tarefa
 func (h *TodoHandler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var todo Todo
 	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		http.Error(w, "JSON inválido: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -78,10 +106,11 @@ func (h *TodoHandler) CreateTodo(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRow(query,
 		sql.Named("title", todo.Title),
 		sql.Named("description", todo.Description),
-		sql.Named("completed", todo.Completed)).Scan(&id, &createdAt, &updatedAt)
+		sql.Named("completed", todo.Completed),
+	).Scan(&id, &createdAt, &updatedAt)
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Erro ao criar tarefa: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -105,7 +134,7 @@ func (h *TodoHandler) UpdateTodo(w http.ResponseWriter, r *http.Request) {
 
 	var todo Todo
 	if err := json.NewDecoder(r.Body).Decode(&todo); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		http.Error(w, "JSON inválido: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -121,19 +150,21 @@ func (h *TodoHandler) UpdateTodo(w http.ResponseWriter, r *http.Request) {
 		sql.Named("title", todo.Title),
 		sql.Named("description", todo.Description),
 		sql.Named("completed", todo.Completed),
-		sql.Named("id", id)).Scan(
+		sql.Named("id", id),
+	).Scan(
 		&updatedTodo.ID,
 		&updatedTodo.Title,
 		&updatedTodo.Description,
 		&updatedTodo.Completed,
 		&updatedTodo.CreatedAt,
-		&updatedTodo.UpdatedAt)
+		&updatedTodo.UpdatedAt,
+	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Tarefa não encontrada", http.StatusNotFound)
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Erro ao atualizar tarefa: "+err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -153,13 +184,13 @@ func (h *TodoHandler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.db.Exec("DELETE FROM todos WHERE id = @id", sql.Named("id", id))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Erro ao deletar tarefa: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Erro ao verificar deleção: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

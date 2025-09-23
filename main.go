@@ -51,9 +51,6 @@ func main() {
 
 	fmt.Println("Conectado ao SQL Server com sucesso!")
 
-	// Criar a tabela se não existir
-	database.CreateTable(db)
-
 	// Inicializar handlers com a conexão do banco
 	todoHandler := handlers.NewTodoHandler(db)
 
