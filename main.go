@@ -11,6 +11,7 @@ import (
 	"todo-api/handlers"
 
 	"github.com/gorilla/mux"
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 // LoadConfig carrega as configurações do ambiente

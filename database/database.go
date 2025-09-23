@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+
+	_ "github.com/microsoft/go-mssqldb"
 )
 
 // Get db config
